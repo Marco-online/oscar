@@ -38,6 +38,8 @@ print
 print "and sign up for an account there. This is the database that Oscar uses to"
 print "match barcodes with names of products. When you're ready, enter your"
 print "API credentials. They can be found on the \"My Account\" page."
+print 
+print "Want to use openfoodfacts.org? Customise /etc/oscar.yaml to set the barcode_api to 'openfoodfacts'"
 print
 digiteyes_app_key = raw_input('App Key ("K" Code): ')
 digiteyes_auth_key = raw_input('Authorization Key ("M" Code): ')
@@ -53,7 +55,7 @@ print
 print "Once you have an account, go to this URL:"
 print
 print "    https://trello.com/1/authorize?key={0}&name=oscar&expiration=never&response_type=token&scope=read,write".format(trello_app_key)
-print 
+print
 print "You'll be shown a 'token'; enter it below."
 print
 trello_token = raw_input('Token: ')
@@ -209,6 +211,37 @@ new_rules = [
     {'search_term': 'olive oil', 'item': 'olive oil'},
     {'search_term': 'cereal', 'item': 'cereal'},
     {'search_term': 'peanut butter', 'item': 'peanut butter'},
+    {'search_term': 'ketchup', 'item': 'ketchup'},
+    {'search_term': 'baking powder', 'item': 'baking powder'},
+    {'search_term': 'yeast', 'item': 'yeast'},
+    {'search_term': 'baking soda', 'item': 'soda'},
+    {'search_term': 'beans', 'item': 'beans'},
+    {'search_term': 'bread crumbs', 'item': 'bread crumbs'},
+    {'search_term': 'broth', 'item': 'broth'},
+    {'search_term': 'cereal', 'item': 'cereal'},
+    {'search_term': 'chocolate', 'item': 'chocolate'},
+    {'search_term': 'cooking spray', 'item': 'cooking spray'},
+    {'search_term': 'cornmeal', 'item': 'cornmeal'},
+    {'search_term': 'cornstarch', 'item': 'cornstarch'},
+    {'search_term': 'crackers', 'item': 'crackers'},
+    {'search_term': 'raisins', 'item': 'raisins'},
+    {'search_term': 'vanilla extract', 'item': 'vanilla extract'},
+    {'search_term': 'flour', 'item': 'flour'},
+    {'search_term': 'mayo', 'item': 'mayo'},
+    {'search_term': 'garlic', 'item': 'garlic'},
+    {'search_term': 'pasta', 'item': 'pasta'},
+    {'search_term': 'bacon', 'item': 'bacon'},
+    {'search_term': 'bread', 'item': 'bread'},
+    {'search_term': 'potatoes', 'item': 'potatoes'},
+    {'search_term': 'rice', 'item': 'rice'},
+    {'search_term': 'soup', 'item': 'soup'},
+    {'search_term': 'sugar', 'item': 'sugar'},
+    {'search_term': 'tea', 'item': 'tea'},
+    {'search_term': 'tuna', 'item': 'tuna'},
+    {'search_term': 'evaporated milk', 'item': 'evaporated milk'},
+    {'search_term': 'vinegar', 'item': 'vinegar'},
+    {'search_term': 'eggs', 'item': 'eggs'},
+    {'search_term': 'chips', 'item': 'chips'},
 ]
 os.chdir('/var/oscar')
 from lib import trellodb
@@ -242,6 +275,9 @@ trello_db_board: '{trello_db_board}'
 
 digiteyes_app_key: '{digiteyes_app_key}'
 digiteyes_auth_key: '{digiteyes_auth_key}'
+
+# possible values: 'digiteyes', 'openfoodfacts' or 'zeroapi'
+barcode_api: digiteyes
 '''.format(**locals()))
 oscar_yaml.close()
 

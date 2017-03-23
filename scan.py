@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 from datetime import datetime
 import struct
@@ -36,6 +37,9 @@ def parse_scanner_data(scanner_data):
     return ''.join(upc_chars)
 
 
+class CodeNotFound(Exception): pass
+class CodeInvalid(Exception): pass
+
 class UPCAPI:
     BASEURL = 'https://www.digit-eyes.com/gtin/v2_0'
 
@@ -53,11 +57,48 @@ class UPCAPI:
 
     def get_description(self, upc):
         """Returns the product description for the given UPC.
-        
+
            `upc`: A string containing the UPC."""
         url = self._url(upc)
-        json_blob = urllib2.urlopen(url).read()
-        return json.loads(json_blob)['description']
+        try:
+            json_blob = urllib2.urlopen(url).read()
+            return json.loads(json_blob)['description'].encode('iso-8859-1')
+        except urllib2.HTTPError, e:
+            if 'UPC/EAN code invalid' in e.msg:
+                raise CodeInvalid(e.msg)
+            elif 'Not found' in e.msg:
+                raise CodeNotFound(e.msg)
+            else:
+                raise
+
+class OpenFoodFactsAPI:
+    def get_description(self, upc):
+        """Returns the product description for the given UPC.
+
+           `upc`: A string containing the UPC."""
+        url = 'http://world.openfoodfacts.org/api/v0/product/{0}.json'.format(upc)
+        try:
+            json_blob = urllib2.urlopen(url).read()
+            data = json.loads(json_blob)
+
+            if data['status_verbose'] != 'product found':
+              raise CodeNotFound(data['status_verbose'])
+
+            if 'product_name' in data['product']:
+              return data['product']['product_name']
+
+            if 'generic_name_en' in data['product']:
+              return data['product']['generic_name_en']
+        except urllib2.HTTPError, e:
+            if 'Not found' in e.msg:
+                raise CodeNotFound(e.msg)
+            else:
+                raise
+
+
+class FakeAPI:
+    def get_description(self, upc):
+        raise CodeNotFound("Code {0} was not found.".format(upc))
 
 
 def local_ip():
@@ -77,14 +118,16 @@ def opp_url(opp):
     return 'http://{0}/learn-barcode/{1}'.format(local_ip(), opp['opp_id'])
 
 
-def create_barcode_opp(trello_db, barcode):
+
+def create_barcode_opp(trello_db, barcode, desc=''):
     """Creates a learning opportunity for the given barcode and writes it to Trello.
-    
+
        Returns the dict."""
     opp = {
         'type': 'barcode',
         'opp_id': generate_opp_id(),
         'barcode': barcode,
+        'desc': desc,
         'created_dt': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
@@ -93,8 +136,21 @@ def create_barcode_opp(trello_db, barcode):
 
 
 def publish_barcode_opp(opp):
-    message = '''Hi! Oscar here. You scanned a code I didn't recognize. Care to fill me in?  {0}'''.format(opp_url(opp))
+    message = '''Hi! Oscar here. You scanned a code I didn't recognize for a "{1}". Care to fill me in?  {0}'''.format(opp_url(opp), opp['desc'])
     subject = '''Didn't Recognize Barcode'''
+    if conf.get()['barcode_api'] == 'openfoodfacts':
+      message = '''Hi! Oscar here. You scanned a code I didn't recognize for a "{1}". Care to fill me in?  {0}. Add to http://world.openfoodfacts.org/cgi/product.pl ?'''.format(opp_url(opp), opp['desc'])
+    
+    communication_method = conf.get()['communication_method']
+    if communication_method == 'email':
+        send_via_email(message, subject)
+    else:
+        send_via_twilio(message)
+
+def notify_no_rule(desc, barcode):
+    learn_opp = opp_url(create_barcode_opp(trello_db, barcode, desc))
+    message = '''Hi! Oscar here. You scanned a code I don't know what to do with barcode {1}: "{0}". Care to fill me in?'''.format(learn_opp, desc )
+    subject = '''No rules set for grocery item'''
     communication_method = conf.get()['communication_method']
     if communication_method == 'email':
         send_via_email(message, subject)
@@ -109,7 +165,7 @@ def send_via_twilio(msg):
 
 def send_via_email(msg, subject):
     to = conf.get()['email_dest']
-    gmail_user = conf.get()['gmail_user'] 
+    gmail_user = conf.get()['gmail_user']
     gmail_pwd = conf.get()['gmail_password']
     smtpserver = smtplib.SMTP("smtp.gmail.com",587)
     smtpserver.ehlo()
@@ -140,7 +196,7 @@ def match_description_rule(trello_db, desc):
        Returns the rule if it exists, otherwise returns None."""
     rules = trello_db.get_all('description_rules')
     for r in rules:
-        if r['search_term'].lower() in desc.lower():
+        if r['search_term'].encode('utf8').lower() in desc.lower():
             return r
     return None
 
@@ -186,7 +242,7 @@ while True:
             scan_complete = True
         if scan_complete:
             break
- 
+
     # Parse the binary data as a barcode
     barcode = parse_scanner_data(scanner_data)
     print "Scanned barcode '{0}'".format(barcode)
@@ -198,25 +254,34 @@ while True:
         continue
 
     # Get the item's description
-    u = UPCAPI(conf.get()['digiteyes_app_key'], conf.get()['digiteyes_auth_key'])
+    barcode_api = conf.get()['barcode_api']
+    if barcode_api == 'zeroapi':
+        u = FakeAPI()
+    elif barcode_api == 'openfoodfacts':
+        u = OpenFoodFactsAPI()
+    else:
+        u = UPCAPI(conf.get()['digiteyes_app_key'], conf.get()['digiteyes_auth_key'])
     try:
         desc = u.get_description(barcode)
-        print "Received description '{0}' for barcode {1}".format(desc, repr(barcode))
-    except urllib2.HTTPError, e:
-        if 'UPC/EAN code invalid' in e.msg:
-            print "Barcode {0} not recognized as a UPC; creating learning opportunity".format(repr(barcode))
+        print "Received description '{0}' for barcode {1}".format(desc, unicode(barcode))
+    except CodeInvalid:
+        print "Barcode {0} not recognized as a UPC; creating learning opportunity".format(unicode(barcode))
+        try:
+            opp = create_barcode_opp(trello_db, barcode, desc)
+        except:
             opp = create_barcode_opp(trello_db, barcode)
-            print "Publishing learning opportunity"
-            publish_barcode_opp(opp)
-            continue
-        elif 'Not found' in e.msg:
-            print "Barcode {0} not found in UPC database; creating learning opportunity".format(repr(barcode))
+        print "Code not UPC. Publishing learning opportunity"
+        publish_barcode_opp(opp)
+        continue
+    except CodeNotFound:
+        print "Barcode {0} not found in UPC database; creating learning opportunity".format(unicode(barcode))
+        try:
+            opp = create_barcode_opp(trello_db, barcode, desc)
+        except:
             opp = create_barcode_opp(trello_db, barcode)
-            print "Publishing learning opportunity via SMS"
-            publish_barcode_opp(opp)
-            continue
-        else:
-            raise
+        print "Code not found. Publishing learning opportunity"
+        publish_barcode_opp(opp)
+        continue
 
     # Match against description rules
     desc_rule = match_description_rule(trello_db, desc)
@@ -225,3 +290,4 @@ while True:
         continue
 
     print "Don't know what to add for product description '{0}'".format(desc)
+    notify_no_rule(desc, barcode)
