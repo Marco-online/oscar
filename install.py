@@ -166,9 +166,15 @@ run_command('easy_install pip')
 run_command('pip install PyYAML trello twilio')
 
 
-######################################## oscar_web dependencies
-run_command('apt-get install npm')
-
+######################################## oscar_web dependencies for Pi 1
+run_command('wget https://nodejs.org/dist/v4.2.4/node-v4.2.4-linux-armv6l.tar.gz')
+run_command('mv node-v4.2.4-linux-armv6l.tar.gz /opt')
+os.chdir('/opt')
+run_command('tar -xzf node-v4.2.4-linux-armv6l.tar.gz')
+run_command('mv node-v4.2.4-linux-armv6l nodejs')
+run_command('rm node-v4.2.4-linux-armv6l.tar.gz')
+run_command('ln -s /opt/nodejs/bin/node /usr/bin/node')
+run_command('ln -s /opt/nodejs/bin/npm /usr/bin/npm')
 
 ######################################## Dependencies of both
 run_command('apt-get install git supervisor')
