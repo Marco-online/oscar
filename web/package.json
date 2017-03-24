@@ -11,6 +11,6 @@
     "jade": "*",
     "node-trello": "*",
     "dot": ">=1.0.2",
-    "js-yaml": "*"
+    "js-yaml": "3.7.0"
   }
 }
